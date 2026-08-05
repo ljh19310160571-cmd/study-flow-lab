@@ -1,0 +1,21 @@
+CREATE TABLE `listening_records` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`book` integer NOT NULL,
+	`test` integer NOT NULL,
+	`part` integer NOT NULL,
+	`question_number` text DEFAULT '' NOT NULL,
+	`category` text NOT NULL,
+	`prompt_expression` text DEFAULT '' NOT NULL,
+	`audio_expression` text DEFAULT '' NOT NULL,
+	`phrase` text DEFAULT '' NOT NULL,
+	`original_sentence` text DEFAULT '' NOT NULL,
+	`context_meaning` text DEFAULT '' NOT NULL,
+	`chunked_sentence` text DEFAULT '' NOT NULL,
+	`chinese_summary` text DEFAULT '' NOT NULL,
+	`evidence` text DEFAULT '' NOT NULL,
+	`notes` text DEFAULT '' NOT NULL,
+	`status` text DEFAULT 'new' NOT NULL,
+	`review_count` integer DEFAULT 0 NOT NULL,
+	`created_at` text DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	`updated_at` text DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
