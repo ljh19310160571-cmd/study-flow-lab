@@ -108,7 +108,6 @@ export default function Home() {
   const [statusFilter, setStatusFilter] = useState<"all" | Status>("all");
   const [reviewIndex, setReviewIndex] = useState(0);
   const [revealed, setRevealed] = useState(false);
-  const [filtersOpen, setFiltersOpen] = useState(false);
 
   useEffect(() => {
     void loadRecords();
@@ -152,17 +151,6 @@ export default function Home() {
     const partThree = records.filter((record) => record.part === 3 && record.status !== "mastered").length;
     return { total: records.length, mastered, partThree, due: records.length - mastered };
   }, [records]);
-
-  const activeFilterChips = useMemo(() => {
-    const chips: string[] = [];
-    if (search.trim()) chips.push(`搜索：${search.trim()}`);
-    if (bookFilter !== "all") chips.push(`剑雅 ${bookFilter}`);
-    if (testFilter !== "all") chips.push(`Test ${testFilter}`);
-    if (partFilter !== "all") chips.push(`Part ${partFilter}`);
-    if (categoryFilter !== "all") chips.push(categoryMeta[categoryFilter].label);
-    if (statusFilter !== "all") chips.push(statusMeta[statusFilter].label);
-    return chips;
-  }, [search, bookFilter, testFilter, partFilter, categoryFilter, statusFilter]);
 
   function updateDraft<K extends keyof RecordDraft>(key: K, value: RecordDraft[K]) {
     setDraft((current) => ({ ...current, [key]: value }));
@@ -344,18 +332,8 @@ export default function Home() {
       {message && <div className="message-bar" role="status">{message}</div>}
 
       {activeView === "records" ? (
-        <>
-          <button
-            className="filter-toggle"
-            type="button"
-            aria-expanded={filtersOpen}
-            onClick={() => setFiltersOpen((open) => !open)}
-          >
-            <span>筛选与定位</span>
-            <strong>{activeFilterChips.length ? `${activeFilterChips.length} 项已启用` : filtersOpen ? "收起" : "展开"}</strong>
-          </button>
-          <div className="workspace-grid">
-          <aside className={`filter-panel ${filtersOpen ? "is-open" : ""}`}>
+        <div className="workspace-grid">
+          <aside className="filter-panel">
             <div className="panel-heading">
               <div><p className="eyebrow">FILTER</p><h3>定位练习</h3></div>
               <button className="text-button" onClick={clearFilters}>清空</button>
@@ -378,12 +356,6 @@ export default function Home() {
               <legend>掌握状态</legend>
               <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as "all" | Status)}><option value="all">全部状态</option><option value="new">待复习</option><option value="reviewing">理解中</option><option value="mastered">已掌握</option></select>
             </fieldset>
-            {activeFilterChips.length > 0 && (
-              <div className="active-filters" aria-label="当前筛选条件">
-                <span>当前筛选</span>
-                <div>{activeFilterChips.map((chip) => <small key={chip}>{chip}</small>)}</div>
-              </div>
-            )}
             <div className="backup-actions">
               <button onClick={exportRecords} disabled={!records.length}>导出备份</button>
               <label>导入备份<input type="file" accept="application/json" onChange={(event) => { const file = event.target.files?.[0]; if (file) void importRecords(file); }} /></label>
@@ -430,8 +402,7 @@ export default function Home() {
               </div>
             )}
           </section>
-          </div>
-        </>
+        </div>
       ) : (
         <section className="review-stage">
           <div className="review-header">
