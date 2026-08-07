@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import TimelineTimer from "./TimelineTimer";
 
 type Category = "paraphrase" | "vocabulary" | "sentence";
 type Status = "new" | "reviewing" | "mastered";
@@ -95,7 +96,7 @@ export default function Home() {
   const [records, setRecords] = useState<ListeningRecord[]>([]);
   const [draft, setDraft] = useState<RecordDraft>(emptyDraft);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [activeView, setActiveView] = useState<"records" | "review">("records");
+  const [activeView, setActiveView] = useState<"records" | "review" | "timer">("records");
   const [formOpen, setFormOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -327,6 +328,7 @@ export default function Home() {
       <nav className="view-tabs" aria-label="页面视图">
         <button className={activeView === "records" ? "active" : ""} onClick={() => setActiveView("records")}>记录库</button>
         <button className={activeView === "review" ? "active" : ""} onClick={() => { setActiveView("review"); setRevealed(false); }}>复习卡片 <span>{reviewRecords.length}</span></button>
+        <button className={activeView === "timer" ? "active" : ""} onClick={() => setActiveView("timer")}>计时器</button>
       </nav>
 
       {message && <div className="message-bar" role="status">{message}</div>}
@@ -403,7 +405,7 @@ export default function Home() {
             )}
           </section>
         </div>
-      ) : (
+      ) : activeView === "review" ? (
         <section className="review-stage">
           <div className="review-header">
             <div><p className="eyebrow">ACTIVE RECALL</p><h3>先回忆，再看答案</h3></div>
@@ -430,7 +432,9 @@ export default function Home() {
             </article>
           )}
         </section>
-      )}
+      ) : null}
+
+      <TimelineTimer hidden={activeView !== "timer"} />
 
       {formOpen && (
         <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setFormOpen(false); }}>
