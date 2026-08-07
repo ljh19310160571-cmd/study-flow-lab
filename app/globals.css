@@ -180,14 +180,28 @@ blockquote { margin: 10px 0 0; border-left: 3px solid var(--line); padding: 8px 
 .timer-console { display: grid; gap: 14px; }
 .timer-now-card { position: relative; overflow: hidden; padding: 28px; background: linear-gradient(145deg, #ffffff, var(--blue-soft)); text-align: center; }
 .timer-now-card::before { content: ""; position: absolute; inset: 0 0 auto; height: 6px; background: linear-gradient(90deg, var(--green), var(--aqua), var(--coral)); }
+.timer-now-card.time-up { background: linear-gradient(145deg, #ffffff, #fff6ef); }
+.timer-now-card.time-up::before { background: linear-gradient(90deg, var(--coral), #efbc95); }
 .timer-now-meta { display: flex; align-items: center; justify-content: space-between; gap: 14px; color: #778681; font-size: 11px; }
 .timer-now-meta span { border-radius: 999px; padding: 5px 9px; background: white; box-shadow: 0 2px 9px rgba(66, 88, 101, .08); }
 .timer-now-card > p { margin: 23px 0 7px; color: var(--green); font-size: 12px; font-weight: 700; }
 .timer-now-card h2 { max-width: 680px; margin: 0 auto; font-size: clamp(22px, 3vw, 34px); line-height: 1.35; }
-.timer-countdown { margin: 24px 0 5px; color: var(--ink); font-size: clamp(52px, 7vw, 78px); font-weight: 700; line-height: 1; letter-spacing: .02em; font-variant-numeric: tabular-nums; }
+.timer-time-grid { display: grid; grid-template-columns: 1.6fr 1fr 1fr; gap: 9px; width: min(680px, 100%); margin: 24px auto 8px; }
+.timer-time-grid > div { display: grid; align-content: center; min-height: 90px; border: 1px solid rgba(113, 144, 145, .18); border-radius: 14px; padding: 13px; background: rgba(255,255,255,.72); }
+.timer-time-grid span, .timer-finish-summary span { color: #7c8883; font-size: 10px; }
+.timer-time-grid strong { margin-top: 7px; color: var(--ink); font-size: 25px; line-height: 1; letter-spacing: .02em; font-variant-numeric: tabular-nums; }
+.timer-time-grid .timer-stage-clock strong { font-size: clamp(43px, 6vw, 64px); }
+.timer-finish-summary { display: grid; place-items: center; width: min(460px, 100%); margin: 25px auto 8px; border: 1px solid #cfe1da; border-radius: 17px; padding: 22px; background: var(--green-soft); }
+.timer-finish-summary strong { margin: 8px 0; color: var(--green); font-size: clamp(42px, 6vw, 64px); font-variant-numeric: tabular-nums; }
+.timer-finish-summary small { color: #63766f; }
 .timer-now-card > small { color: #7c8883; font-size: 11px; }
+.timer-expired-note { width: fit-content; margin: 15px auto 0 !important; border-radius: 10px; padding: 8px 12px; background: #fff0e5 !important; color: #9a6747 !important; font-size: 10px !important; }
 .timer-controls { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; margin-top: 23px; }
 .timer-controls button { min-height: 42px; }
+.complete-stage-button, .add-time-button { border-radius: 12px; padding: 10px 15px; cursor: pointer; font-weight: 700; }
+.complete-stage-button { border: 1px solid var(--green); background: var(--green); color: white; }
+.add-time-button { border: 1px solid #b9d2d3; background: #f1f8f8; color: #557e80; }
+.complete-stage-button:hover, .add-time-button:hover { transform: translateY(-1px); }
 .timer-sound-test { border: 1px solid var(--line); border-radius: 12px; padding: 10px 15px; background: white; cursor: pointer; color: #687670; font-weight: 700; }
 .sound-toggle { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 15px; color: #77827e; font-size: 11px; }
 .sound-toggle input { width: 15px; height: 15px; padding: 0; accent-color: var(--green); }
@@ -199,15 +213,19 @@ blockquote { margin: 10px 0 0; border-left: 3px solid var(--line); padding: 8px 
 .timeline-progress > div { height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--green), var(--aqua)); transition: width .3s linear; }
 .timeline-progress > i { position: absolute; top: -2px; bottom: -2px; width: 1px; background: rgba(255,255,255,.95); }
 .timeline-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
-.timeline-list li { display: grid; grid-template-columns: 34px minmax(0, 1fr); align-items: center; gap: 11px; border: 1px solid #e1e8e4; border-radius: 12px; padding: 11px 13px; background: #fbfcfb; transition: border .18s ease, background .18s ease, transform .18s ease; }
+.timeline-list li { display: grid; grid-template-columns: 34px minmax(0, 1fr) 34px; align-items: center; gap: 11px; border: 1px solid #e1e8e4; border-radius: 12px; padding: 11px 13px; background: #fbfcfb; transition: border .18s ease, background .18s ease, transform .18s ease; }
 .timeline-list li > span { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; background: #edf1ef; color: #7c8782; font-weight: 800; }
-.timeline-list li > div { display: flex; align-items: center; justify-content: space-between; gap: 15px; }
+.timeline-list li > div { display: grid; gap: 2px; text-align: left; }
 .timeline-list li strong { font-size: 12px; line-height: 1.5; }
-.timeline-list li small { flex: 0 0 auto; color: #8d9692; font-size: 10px; }
+.timeline-list li small { color: #8d9692; font-size: 10px; }
 .timeline-list li.active { transform: translateX(2px); border-color: #7fb4b8; background: var(--blue-soft); }
 .timeline-list li.active > span { background: var(--green); color: white; }
 .timeline-list li.completed { border-color: #cfe1da; background: var(--green-soft); }
-.timeline-list li.completed > span { background: white; color: var(--green); }
+.timeline-list li.completed > span { color: var(--green); }
+.timeline-check { display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid #cfdad6; border-radius: 9px; padding: 0; background: white; color: white; cursor: pointer; font-size: 16px; font-weight: 800; }
+.timeline-list li.active .timeline-check { border-color: var(--green); box-shadow: 0 0 0 3px rgba(99, 153, 139, .11); }
+.timeline-list li.completed .timeline-check { border-color: var(--green); background: var(--green); }
+.timeline-check:disabled { cursor: default; opacity: .42; }
 .timer-empty { display: grid; place-items: center; min-height: 500px; border: 1px dashed var(--line); border-radius: 18px; padding: 35px; background: white; text-align: center; }
 .timer-empty h3 { margin: 17px 0 7px; font-size: 21px; }
 .timer-empty p { margin: 0; color: var(--muted); font-size: 12px; }
@@ -286,10 +304,10 @@ blockquote { margin: 10px 0 0; border-left: 3px solid var(--line); padding: 8px 
   .timer-heading { align-items: flex-start; flex-direction: column; }
   .timer-heading > p { text-align: left; }
   .timer-now-card, .timeline-card { padding: 20px 15px; }
-  .timer-countdown { font-size: 54px; }
+  .timer-time-grid { grid-template-columns: 1fr 1fr; }
+  .timer-time-grid .timer-stage-clock { grid-column: 1 / -1; }
   .timer-import-actions { grid-template-columns: 1fr; }
-  .timeline-list li > div { align-items: flex-start; flex-direction: column; gap: 3px; }
-  .timeline-list li small { flex: auto; }
+  .timer-controls button { flex: 1 1 calc(50% - 8px); }
   .modal-backdrop { padding: 0; align-items: end; }
   .record-modal { max-height: 94vh; border-radius: 22px 22px 0 0; padding: 22px 16px; }
   .location-grid { grid-template-columns: repeat(2, 1fr); }
