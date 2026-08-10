@@ -2,6 +2,9 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import TimelineTimer from "./TimelineTimer";
+import TodoBoard from "./TodoBoard";
+import SpeakingStudio from "./SpeakingStudio";
+import DailyProgress from "./DailyProgress";
 
 type Category = "paraphrase" | "vocabulary" | "sentence";
 type Status = "new" | "reviewing" | "mastered";
@@ -96,7 +99,9 @@ export default function Home() {
   const [records, setRecords] = useState<ListeningRecord[]>([]);
   const [draft, setDraft] = useState<RecordDraft>(emptyDraft);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [activeView, setActiveView] = useState<"records" | "review" | "timer">("records");
+  const [activeView, setActiveView] = useState<"listening" | "speaking" | "timer" | "todo" | "daily">("listening");
+  const [listeningView, setListeningView] = useState<"records" | "review">("records");
+  const [dashboard, setDashboard] = useState({ openTodos: 0, speakingCount: 0, todayCount: 0 });
   const [formOpen, setFormOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -112,7 +117,14 @@ export default function Home() {
 
   useEffect(() => {
     void loadRecords();
+    void loadDashboard();
   }, []);
+
+  async function loadDashboard() {
+    const response = await fetch("/api/dashboard", { cache: "no-store" });
+    const payload = await response.json() as Partial<typeof dashboard>;
+    if (response.ok) setDashboard({ openTodos: payload.openTodos || 0, speakingCount: payload.speakingCount || 0, todayCount: payload.todayCount || 0 });
+  }
 
   async function loadRecords() {
     try {
@@ -286,54 +298,55 @@ export default function Home() {
     <main className="app-shell">
       <header className="topbar">
         <div className="brand-lockup">
-          <div className="brand-mark" aria-hidden="true">L</div>
+          <div className="brand-mark" aria-hidden="true">S</div>
           <div>
-            <p className="eyebrow">IELTS LISTENING LAB</p>
-            <h1>听力错因档案</h1>
+            <p className="eyebrow">STUDY FLOW LAB</p>
+            <h1>学习行动档案</h1>
           </div>
         </div>
         <div className="header-actions">
           <span className="date-chip">{todayLabel()}</span>
-          <button className="primary-button" onClick={() => openNew()}>
+          {activeView === "listening" && <button className="primary-button" onClick={() => openNew()}>
             <span aria-hidden="true">＋</span> 记一条
-          </button>
+          </button>}
         </div>
       </header>
 
       <section className="hero-panel">
         <div>
-          <p className="eyebrow dark">CURRENT FOCUS · 剑雅 19</p>
-          <h2>把“没听懂”拆成<br /><em>下一次能认出的线索。</em></h2>
-          <p className="hero-copy">记录题目与录音之间的落差。复习时，不背答案，只复现证据。</p>
+          <p className="eyebrow dark">LEARN · PRACTISE · REVIEW</p>
+          <h2>把每天的学习，变成<br /><em>看得见的行动轨迹。</em></h2>
+          <p className="hero-copy">专用档案沉淀方法，通用工具守住节奏。记录不是负担，而是让下一次练习更准。</p>
         </div>
-        <div className="hero-progress" aria-label="掌握进度">
-          <div className="progress-ring" style={{ "--progress": `${records.length ? Math.round((stats.mastered / records.length) * 100) : 0}%` } as React.CSSProperties}>
-            <strong>{records.length ? Math.round((stats.mastered / records.length) * 100) : 0}%</strong>
-            <span>已掌握</span>
+        <div className="hero-progress" aria-label="今日行动">
+          <div className="progress-ring" style={{ "--progress": `${Math.min(100, dashboard.todayCount * 20)}%` } as React.CSSProperties}>
+            <strong>{dashboard.todayCount}</strong>
+            <span>今日行动</span>
           </div>
           <div className="hero-note">
-            <span>本轮策略</span>
-            <strong>同义替换 → 词组 → 长句意群</strong>
+            <span>行动闭环</span>
+            <strong>规划 → 限时练习 → 归档 → 复盘</strong>
           </div>
         </div>
       </section>
 
       <section className="stats-grid" aria-label="学习数据">
-        <article><span>全部记录</span><strong>{stats.total}</strong><small>持续积累</small></article>
-        <article><span>待复习</span><strong>{stats.due}</strong><small>今天先少量消化</small></article>
-        <article><span>Part 3 待掌握</span><strong>{stats.partThree}</strong><small>当前薄弱区</small></article>
-        <article><span>已掌握</span><strong>{stats.mastered}</strong><small>需要新题迁移验证</small></article>
+        <article><span>听力档案</span><strong>{stats.total}</strong><small>{stats.due} 条待复习</small></article>
+        <article><span>口语语料</span><strong>{dashboard.speakingCount}</strong><small>按主题持续积累</small></article>
+        <article><span>待办事项</span><strong>{dashboard.openTodos}</strong><small>先记下，不打断主线</small></article>
+        <article><span>今日完成</span><strong>{dashboard.todayCount}</strong><small>行动正在变得可见</small></article>
       </section>
 
-      <nav className="view-tabs" aria-label="页面视图">
-        <button className={activeView === "records" ? "active" : ""} onClick={() => setActiveView("records")}>记录库</button>
-        <button className={activeView === "review" ? "active" : ""} onClick={() => { setActiveView("review"); setRevealed(false); }}>复习卡片 <span>{reviewRecords.length}</span></button>
-        <button className={activeView === "timer" ? "active" : ""} onClick={() => setActiveView("timer")}>计时器</button>
+      <nav className="module-nav" aria-label="学习模块">
+        <div><small>IELTS 专用</small><button className={activeView === "listening" ? "active" : ""} onClick={() => setActiveView("listening")}>听力档案</button><button className={activeView === "speaking" ? "active" : ""} onClick={() => setActiveView("speaking")}>口语练习</button></div>
+        <div><small>通用工具</small><button className={activeView === "timer" ? "active" : ""} onClick={() => setActiveView("timer")}>连续计时器</button><button className={activeView === "todo" ? "active" : ""} onClick={() => setActiveView("todo")}>To Do</button><button className={activeView === "daily" ? "active" : ""} onClick={() => setActiveView("daily")}>行动记录</button></div>
       </nav>
+
+      {activeView === "listening" && <nav className="view-tabs" aria-label="听力档案视图"><button className={listeningView === "records" ? "active" : ""} onClick={() => setListeningView("records")}>记录库</button><button className={listeningView === "review" ? "active" : ""} onClick={() => { setListeningView("review"); setRevealed(false); }}>复习卡片 <span>{reviewRecords.length}</span></button></nav>}
 
       {message && <div className="message-bar" role="status">{message}</div>}
 
-      {activeView === "records" ? (
+      {activeView === "listening" && listeningView === "records" ? (
         <div className="workspace-grid">
           <aside className="filter-panel">
             <div className="panel-heading">
@@ -405,7 +418,7 @@ export default function Home() {
             )}
           </section>
         </div>
-      ) : activeView === "review" ? (
+      ) : activeView === "listening" && listeningView === "review" ? (
         <section className="review-stage">
           <div className="review-header">
             <div><p className="eyebrow">ACTIVE RECALL</p><h3>先回忆，再看答案</h3></div>
@@ -434,7 +447,10 @@ export default function Home() {
         </section>
       ) : null}
 
-      <TimelineTimer hidden={activeView !== "timer"} />
+      <SpeakingStudio hidden={activeView !== "speaking"} onChanged={() => void loadDashboard()} />
+      <TimelineTimer hidden={activeView !== "timer"} onRecorded={() => void loadDashboard()} />
+      <TodoBoard hidden={activeView !== "todo"} onChanged={() => void loadDashboard()} />
+      <DailyProgress hidden={activeView !== "daily"} onChanged={() => void loadDashboard()} />
 
       {formOpen && (
         <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setFormOpen(false); }}>

@@ -9,18 +9,18 @@ export async function generateMetadata(): Promise<Metadata> {
   const baseUrl = `${protocol}://${host}`;
 
   return {
-    title: "听力错因档案｜IELTS Listening Lab",
-    description: "按剑雅、Test、Part记录同义替换、生词词组与长句分析，并通过主动回忆完成复习。",
+    title: "学习行动档案｜Study Flow Lab",
+    description: "集听力错因、口语语料、连续计时、待办捕捉与每日行动复盘于一体的个人学习工具。",
     openGraph: {
-      title: "听力错因档案",
-      description: "同义替换 · 生词词组 · 长句分析",
+      title: "学习行动档案",
+      description: "IELTS 专用档案 · 连续计时 · 每日行动复盘",
       type: "website",
-      images: [{ url: `${baseUrl}/og-pink.png`, width: 1200, height: 630, alt: "听力错因档案" }],
+      images: [{ url: `${baseUrl}/og-pink.png`, width: 1200, height: 630, alt: "学习行动档案" }],
     },
     twitter: {
       card: "summary_large_image",
-      title: "听力错因档案",
-      description: "同义替换 · 生词词组 · 长句分析",
+      title: "学习行动档案",
+      description: "IELTS 专用档案 · 连续计时 · 每日行动复盘",
       images: [`${baseUrl}/og-pink.png`],
     },
   };

@@ -37,4 +37,48 @@ export async function ensureSchema() {
       updated_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL
     )
   `).run();
+
+  await env.DB.batch([
+    env.DB.prepare(`CREATE TABLE IF NOT EXISTS todo_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+      title TEXT NOT NULL,
+      kind TEXT DEFAULT 'branch' NOT NULL,
+      area TEXT DEFAULT 'general' NOT NULL,
+      completed INTEGER DEFAULT 0 NOT NULL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL
+    )`),
+    env.DB.prepare(`CREATE TABLE IF NOT EXISTS speaking_entries (
+      id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+      part INTEGER NOT NULL,
+      topic TEXT NOT NULL,
+      question TEXT NOT NULL,
+      keywords TEXT DEFAULT '' NOT NULL,
+      full_answer TEXT DEFAULT '' NOT NULL,
+      expressions TEXT DEFAULT '' NOT NULL,
+      review_notes TEXT DEFAULT '' NOT NULL,
+      raw_text TEXT DEFAULT '' NOT NULL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL
+    )`),
+    env.DB.prepare(`CREATE TABLE IF NOT EXISTS daily_entries (
+      id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+      date TEXT NOT NULL,
+      category TEXT DEFAULT 'other' NOT NULL,
+      title TEXT NOT NULL,
+      quantity INTEGER DEFAULT 0 NOT NULL,
+      unit TEXT DEFAULT '' NOT NULL,
+      duration_minutes INTEGER DEFAULT 0 NOT NULL,
+      notes TEXT DEFAULT '' NOT NULL,
+      source TEXT DEFAULT 'manual' NOT NULL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL
+    )`),
+    env.DB.prepare(`CREATE TABLE IF NOT EXISTS daily_reviews (
+      id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+      date TEXT NOT NULL UNIQUE,
+      content TEXT DEFAULT '' NOT NULL,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL
+    )`),
+  ]);
 }

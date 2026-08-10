@@ -128,7 +128,7 @@ function formatUsedTime(seconds: number) {
   return remaining ? `${minutes} 分 ${remaining} 秒` : `${minutes} 分钟`;
 }
 
-export default function TimelineTimer({ hidden = false }: { hidden?: boolean }) {
+export default function TimelineTimer({ hidden = false, onRecorded }: { hidden?: boolean; onRecorded?: () => void }) {
   const initialPlan = useMemo(() => parseTimelineText(examplePlan), []);
   const [input, setInput] = useState(examplePlan);
   const [plan, setPlan] = useState<TimerPlan | null>(initialPlan);
@@ -140,6 +140,7 @@ export default function TimelineTimer({ hidden = false }: { hidden?: boolean }) 
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [parseMessage, setParseMessage] = useState("示例计划已识别，可以直接开始。");
   const [hydrated, setHydrated] = useState(false);
+  const [recorded, setRecorded] = useState(false);
   const audioContextRef = useRef<AudioContext | null>(null);
   const runAnchorRef = useRef<RunAnchor | null>(null);
   const expiredChimeRef = useRef(false);
@@ -290,19 +291,34 @@ export default function TimelineTimer({ hidden = false }: { hidden?: boolean }) 
       setItemProgress((current) => current.map((item, index) => (
         index === activeIndex ? { ...item, actualSeconds: anchor.itemActualSeconds + runSeconds } : item
       )));
-      if (remaining === 0) {
-        setRunning(false);
-        runAnchorRef.current = null;
-        if (!expiredChimeRef.current) {
-          expiredChimeRef.current = true;
-          playChime(2);
+      if (remaining === 0 && !expiredChimeRef.current) {
+        expiredChimeRef.current = true;
+        const elapsed = anchor.actualElapsedSeconds + runSeconds;
+        const finishedProgress = itemProgress.map((item, index) => index === activeIndex
+          ? { ...item, completed: true, actualSeconds: anchor.itemActualSeconds + runSeconds }
+          : item);
+        const nextIndex = activeIndex + 1;
+        playChime(2);
+        if (!plan || nextIndex >= plan.items.length) {
+          setItemProgress(finishedProgress);
+          setActualElapsedSeconds(elapsed);
+          setRunning(false);
+          runAnchorRef.current = null;
+          return;
         }
+        const nextRemaining = plannedSeconds(plan.items[nextIndex]) + finishedProgress[nextIndex].addedSeconds;
+        setItemProgress(finishedProgress);
+        setActualElapsedSeconds(elapsed);
+        setActiveIndex(nextIndex);
+        setStageRemainingSeconds(nextRemaining);
+        runAnchorRef.current = { startedAt: Date.now(), stageRemainingSeconds: nextRemaining, actualElapsedSeconds: elapsed, itemActualSeconds: finishedProgress[nextIndex].actualSeconds, activeIndex: nextIndex };
+        expiredChimeRef.current = false;
       }
     };
     tick();
     const interval = window.setInterval(tick, 250);
     return () => window.clearInterval(interval);
-  }, [running, activeIndex]);
+  }, [running, activeIndex, plan]);
 
   const sessionComplete = Boolean(plan?.items.length && itemProgress.length && itemProgress.every((item) => item.completed));
   const currentItem = plan?.items[activeIndex] || null;
@@ -340,6 +356,7 @@ export default function TimelineTimer({ hidden = false }: { hidden?: boolean }) 
       setActualElapsedSeconds(0);
       setItemProgress(createProgress(nextPlan));
       setRunning(false);
+      setRecorded(false);
       runAnchorRef.current = null;
       expiredChimeRef.current = false;
       setParseMessage(`已识别 ${nextPlan.items.length} 个时间段，共 ${nextPlan.totalMinutes} 分钟。`);
@@ -371,7 +388,6 @@ export default function TimelineTimer({ hidden = false }: { hidden?: boolean }) 
 
   function completeCurrentItem() {
     if (!plan || sessionComplete || !currentProgress) return;
-    const wasRunning = running;
     const snapshot = getSnapshot();
     const finishedProgress = snapshot.progress.map((item, index) => (
       index === activeIndex ? { ...item, completed: true } : item
@@ -392,9 +408,7 @@ export default function TimelineTimer({ hidden = false }: { hidden?: boolean }) 
     const nextRemaining = plannedSeconds(plan.items[nextIndex]) + finishedProgress[nextIndex].addedSeconds;
     setActiveIndex(nextIndex);
     setStageRemainingSeconds(nextRemaining);
-    if (wasRunning) {
-      window.setTimeout(() => startRun(nextIndex, nextRemaining, snapshot.elapsed, finishedProgress), 0);
-    }
+    window.setTimeout(() => startRun(nextIndex, nextRemaining, snapshot.elapsed, finishedProgress), 0);
   }
 
   function addTime(seconds: number) {
@@ -427,7 +441,18 @@ export default function TimelineTimer({ hidden = false }: { hidden?: boolean }) 
     setStageRemainingSeconds(plannedSeconds(plan.items[0]));
     setActualElapsedSeconds(0);
     setItemProgress(nextProgress);
+    setRecorded(false);
     expiredChimeRef.current = false;
+  }
+
+  async function recordSession() {
+    if (!plan || !sessionComplete || recorded) return;
+    const title = plan.title;
+    const category = /口语|speaking/i.test(title) ? "speaking" : /听力|IELTS|P\s*[1-4]/i.test(title) ? "listening" : /TOPIK|韩语/i.test(title) ? "topik" : /前端|项目|code|project/i.test(title) ? "project" : "other";
+    const now = new Date();
+    const date = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+    const response = await fetch("/api/daily", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date, category, title, durationMinutes: Math.max(1, Math.round(actualElapsedSeconds / 60)), notes: `${plan.items.length} 个阶段全部完成`, source: "timer" }) });
+    if (response.ok) { setRecorded(true); onRecorded?.(); }
   }
 
   const comparisonSeconds = actualElapsedSeconds - plannedTotalSeconds;
@@ -435,8 +460,8 @@ export default function TimelineTimer({ hidden = false }: { hidden?: boolean }) 
   return (
     <section className="timer-stage" hidden={hidden} aria-label="学习计时器">
       <div className="timer-heading">
-        <div><p className="eyebrow">FOCUS TIMELINE</p><h3>按实际节奏推进每一项</h3></div>
-        <p>提前完成就勾选进入下一项；时间不够时可以直接加时，实际用时会自动保留。</p>
+        <div><p className="eyebrow">FOCUS TIMELINE</p><h3>一次开始，全程连续推进</h3></div>
+        <p>到点或手动勾选都会自动进入下一项；需要时直接加时，实际用时会完整保留。</p>
       </div>
 
       <div className="timer-layout">
@@ -461,9 +486,9 @@ export default function TimelineTimer({ hidden = false }: { hidden?: boolean }) 
         <div className="timer-console">
           {plan ? (
             <>
-              <div className={`timer-now-card${stageRemainingSeconds === 0 && !sessionComplete ? " time-up" : ""}`}>
+              <div className="timer-now-card">
                 <div className="timer-now-meta">
-                  <span>{sessionComplete ? "本轮已完成" : running ? "专注进行中" : stageRemainingSeconds === 0 ? "本段时间到了" : actualElapsedSeconds ? "已暂停" : "倒计时已准备"}</span>
+                  <span>{sessionComplete ? "本轮已完成" : running ? "连续计时中" : actualElapsedSeconds ? "已暂停" : "倒计时已准备"}</span>
                   <strong>{sessionComplete ? `${plan.items.length} / ${plan.items.length}` : `${activeIndex + 1} / ${plan.items.length}`}</strong>
                 </div>
                 <p>{plan.title}</p>
@@ -490,10 +515,6 @@ export default function TimelineTimer({ hidden = false }: { hidden?: boolean }) 
                   </small>
                 )}
 
-                {stageRemainingSeconds === 0 && !sessionComplete && (
-                  <p className="timer-expired-note">提示音已响。本项完成就打勾；还没完成则选择加时。</p>
-                )}
-
                 <div className="timer-controls">
                   {!sessionComplete && stageRemainingSeconds > 0 && (
                     <button className="primary-button" type="button" onClick={toggleTimer}>{running ? "暂停" : currentProgress?.actualSeconds ? "继续" : actualElapsedSeconds ? "开始本项" : "开始倒计时"}</button>
@@ -504,9 +525,10 @@ export default function TimelineTimer({ hidden = false }: { hidden?: boolean }) 
                   {!sessionComplete && <button className="add-time-button" type="button" onClick={() => addTime(60)}>＋1 分钟</button>}
                   {!sessionComplete && <button className="add-time-button" type="button" onClick={() => addTime(300)}>＋5 分钟</button>}
                   <button className="secondary-button" type="button" onClick={resetTimer}>{sessionComplete ? "再来一轮" : "重置"}</button>
+                  {sessionComplete && <button className="complete-stage-button" type="button" disabled={recorded} onClick={() => void recordSession()}>{recorded ? "✓ 已记入今日行动" : "记入今日行动"}</button>}
                   <button className="timer-sound-test" type="button" onClick={() => playChime()}>试听提示音</button>
                 </div>
-                <label className="sound-toggle"><input type="checkbox" checked={soundEnabled} onChange={(event) => setSoundEnabled(event.target.checked)} /> 阶段到点及手动完成时播放提示音</label>
+                <label className="sound-toggle"><input type="checkbox" checked={soundEnabled} onChange={(event) => setSoundEnabled(event.target.checked)} /> 阶段切换时播放提示音，倒计时继续运行</label>
               </div>
 
               <div className="timeline-card">
