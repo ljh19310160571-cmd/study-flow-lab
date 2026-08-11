@@ -9,12 +9,12 @@
 }
 
 @font-face {
-  font-family: "Sounso Moon Notes";
-  src: url("/fonts/No.013-Sounso-Moon-2.ttf") format("truetype");
+  font-family: "Pippa Handwriting Notes";
+  src: url("/fonts/PippaHandwriting-Regular-3.ttf") format("truetype");
   font-style: normal;
   font-weight: 400;
   font-display: swap;
-  size-adjust: 180%;
+  size-adjust: 120%;
   unicode-range: U+0000-024F, U+1E00-1EFF;
 }
 
@@ -407,7 +407,7 @@ blockquote { margin: 10px 0 0; border-left: 3px solid var(--line); padding: 8px 
 .action-list h4,
 .action-list p,
 .review-box textarea {
-  font-family: "Sounso Moon Notes", "FuLu LingGan HeCha", "Microsoft YaHei", sans-serif;
+  font-family: "Pippa Handwriting Notes", "FuLu LingGan HeCha", "Microsoft YaHei", sans-serif;
 }
 
 @media (max-width: 980px) {
