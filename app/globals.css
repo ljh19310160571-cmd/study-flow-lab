@@ -9,8 +9,8 @@
 }
 
 @font-face {
-  font-family: "Pippa Handwriting Notes";
-  src: url("/fonts/PippaHandwriting-Regular-3.ttf") format("truetype");
+  font-family: "Caroni Notes";
+  src: url("/fonts/Caroni-Regular-2.otf") format("opentype");
   font-style: normal;
   font-weight: 400;
   font-display: swap;
@@ -407,7 +407,7 @@ blockquote { margin: 10px 0 0; border-left: 3px solid var(--line); padding: 8px 
 .action-list h4,
 .action-list p,
 .review-box textarea {
-  font-family: "Pippa Handwriting Notes", "FuLu LingGan HeCha", "Microsoft YaHei", sans-serif;
+  font-family: "Caroni Notes", "FuLu LingGan HeCha", "Microsoft YaHei", sans-serif;
 }
 
 @media (max-width: 980px) {
