@@ -8,6 +8,15 @@
   font-display: swap;
 }
 
+@font-face {
+  font-family: "Sounso Moon Notes";
+  src: url("/fonts/No.013-Sounso-Moon-2.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  unicode-range: U+0000-024F, U+1E00-1EFF;
+}
+
 :root {
   --ink: #425865;
   --muted: #758792;
@@ -369,6 +378,35 @@ blockquote { margin: 10px 0 0; border-left: 3px solid var(--line); padding: 8px 
 .timeline-title h3,
 .timer-empty h3 {
   font-family: "FuLu LingGan HeCha", "Microsoft YaHei", sans-serif;
+}
+
+/* 只改变用户写入、粘贴或保存的内容；模块标题、导航和工具名称保持原字体。 */
+.record-body h4,
+.answer-line strong,
+.record-body blockquote,
+.record-note,
+.review-card h2,
+.review-answer > strong,
+.review-answer blockquote,
+.review-answer p,
+.dynamic-fields input,
+.dynamic-fields textarea,
+.extra-fields textarea,
+.timer-import-card textarea,
+.timer-now-card > p,
+.timer-now-card h2,
+.timeline-list li strong,
+.todo-title input,
+.todo-item h3,
+.corpus-import textarea,
+.corpus-card summary small,
+.corpus-card summary strong,
+.preserve-lines,
+.action-form input,
+.action-list h4,
+.action-list p,
+.review-box textarea {
+  font-family: "Sounso Moon Notes", "FuLu LingGan HeCha", "Microsoft YaHei", sans-serif;
 }
 
 @media (max-width: 980px) {
