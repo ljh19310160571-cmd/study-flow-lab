@@ -43,6 +43,33 @@ export async function POST(request: Request) {
   } catch (error) { return errorResponse(error); }
 }
 
+export async function PUT(request: Request) {
+  try {
+    await ensureSchema();
+    const body = await request.json() as Record<string, unknown>;
+    const id = Number(body.id);
+    if (!Number.isInteger(id)) return Response.json({ error: "行动编号无效" }, { status: 400 });
+    const categories = ["listening", "speaking", "topik", "project", "other"] as const;
+    if (!categories.includes(body.category as typeof categories[number])) return Response.json({ error: "行动类别无效" }, { status: 400 });
+    const date = clean(body.date);
+    const title = clean(body.title);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return Response.json({ error: "行动日期无效" }, { status: 400 });
+    if (!title) return Response.json({ error: "请写下完成了什么" }, { status: 400 });
+    const [entry] = await getDb().update(dailyEntries).set({
+      date,
+      category: body.category as typeof categories[number],
+      title,
+      quantity: Math.max(0, Math.round(Number(body.quantity) || 0)),
+      unit: clean(body.unit),
+      durationMinutes: Math.max(0, Math.round(Number(body.durationMinutes) || 0)),
+      notes: clean(body.notes),
+      updatedAt: new Date().toISOString(),
+    }).where(eq(dailyEntries.id, id)).returning();
+    if (!entry) return Response.json({ error: "没有找到这条行动记录" }, { status: 404 });
+    return Response.json({ entry });
+  } catch (error) { return errorResponse(error); }
+}
+
 export async function DELETE(request: Request) {
   try {
     await ensureSchema();

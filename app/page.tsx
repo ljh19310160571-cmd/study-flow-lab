@@ -306,9 +306,6 @@ export default function Home() {
         </div>
         <div className="header-actions">
           <span className="date-chip">{todayLabel()}</span>
-          {activeView === "listening" && <button className="primary-button" onClick={() => openNew()}>
-            <span aria-hidden="true">＋</span> 记一条
-          </button>}
         </div>
       </header>
 

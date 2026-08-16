@@ -13,6 +13,11 @@ export default function TodoBoard({ hidden, onChanged }: { hidden?: boolean; onC
   const [area, setArea] = useState<Todo["area"]>("general");
   const [filter, setFilter] = useState<"open" | "done" | "all">("open");
   const [message, setMessage] = useState("");
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editKind, setEditKind] = useState<Todo["kind"]>("branch");
+  const [editArea, setEditArea] = useState<Todo["area"]>("general");
+  const [savingEdit, setSavingEdit] = useState(false);
 
   async function load() {
     const response = await fetch("/api/todos", { cache: "no-store" });
@@ -40,7 +45,38 @@ export default function TodoBoard({ hidden, onChanged }: { hidden?: boolean; onC
     if ((await fetch(`/api/todos?id=${id}`, { method: "DELETE" })).ok) { setItems((current) => current.filter((item) => item.id !== id)); onChanged?.(); }
   }
 
-  return <section className="tool-stage" hidden={hidden}>
+  function beginEdit(item: Todo) {
+    setEditingId(item.id);
+    setEditTitle(item.title);
+    setEditKind(item.kind);
+    setEditArea(item.area);
+    setMessage("");
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEditTitle("");
+  }
+
+  async function saveEdit(event: FormEvent) {
+    event.preventDefault();
+    if (editingId === null || !editTitle.trim()) return setMessage("待办内容不能为空。");
+    setSavingEdit(true);
+    const response = await fetch("/api/todos", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: editingId, title: editTitle, kind: editKind, area: editArea }),
+    });
+    const data = await response.json() as { item?: Todo; error?: string };
+    setSavingEdit(false);
+    if (!response.ok || !data.item) return setMessage(data.error || "修改失败");
+    setItems((current) => current.map((item) => item.id === editingId ? data.item! : item));
+    cancelEdit();
+    setMessage("待办内容已更新。");
+    onChanged?.();
+  }
+
+  return <section className="tool-stage todo-stage" hidden={hidden}>
     <div className="module-heading"><div><p className="eyebrow">QUICK CAPTURE</p><h2>To Do · 先记下，再回到主线</h2></div><p>学习中冒出的支线、想法和待修改内容，都先放这里。</p></div>
     <form className="todo-capture" onSubmit={add}>
       <label className="todo-title"><span>现在别做，只写一句</span><input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="例如：给计时器增加本周统计" /></label>
@@ -53,7 +89,13 @@ export default function TodoBoard({ hidden, onChanged }: { hidden?: boolean; onC
     <div className="todo-list">{visible.length ? visible.map((item) => <article className={item.completed ? "todo-item done" : "todo-item"} key={item.id}>
       <button className="todo-check" onClick={() => void toggle(item)} aria-label={item.completed ? "恢复待办" : "完成待办"}>{item.completed ? "✓" : ""}</button>
       <div><h3>{item.title}</h3><p><span>{kindLabels[item.kind]}</span><span>{areaLabels[item.area]}</span></p></div>
-      <button className="danger-link" onClick={() => void remove(item.id)}>删除</button>
+      <div className="todo-item-actions"><button type="button" onClick={() => beginEdit(item)}>修改</button><button className="danger-link" type="button" onClick={() => void remove(item.id)}>删除</button></div>
+      {editingId === item.id && <form className="todo-edit-form" onSubmit={saveEdit}>
+        <label className="todo-title"><span>待办内容</span><input value={editTitle} onChange={(event) => setEditTitle(event.target.value)} autoFocus /></label>
+        <label><span>类型</span><select value={editKind} onChange={(event) => setEditKind(event.target.value as Todo["kind"])}>{Object.entries(kindLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
+        <label><span>归属</span><select value={editArea} onChange={(event) => setEditArea(event.target.value as Todo["area"])}>{Object.entries(areaLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
+        <div className="record-edit-actions"><button className="primary-button" disabled={savingEdit}>{savingEdit ? "保存中…" : "保存修改"}</button><button className="secondary-button" type="button" onClick={cancelEdit}>取消</button></div>
+      </form>}
     </article>) : <div className="compact-empty">这里已经清空，可以专心做主线任务。</div>}</div>
   </section>;
 }

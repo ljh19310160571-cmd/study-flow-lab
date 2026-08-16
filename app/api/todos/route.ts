@@ -36,11 +36,20 @@ export async function PUT(request: Request) {
     const body = await request.json() as Record<string, unknown>;
     const id = Number(body.id);
     if (!Number.isInteger(id)) return Response.json({ error: "待办编号无效" }, { status: 400 });
+    const kinds = ["branch", "idea", "fix"] as const;
+    const areas = ["general", "listening", "speaking", "topik", "project"] as const;
+    const title = clean(body.title);
+    if ("title" in body && !title) return Response.json({ error: "待办内容不能为空" }, { status: 400 });
+    if (body.kind !== undefined && !kinds.includes(body.kind as typeof kinds[number])) return Response.json({ error: "待办类型无效" }, { status: 400 });
+    if (body.area !== undefined && !areas.includes(body.area as typeof areas[number])) return Response.json({ error: "待办归属无效" }, { status: 400 });
     const [item] = await getDb().update(todoItems).set({
-      completed: Boolean(body.completed),
-      ...(clean(body.title) ? { title: clean(body.title) } : {}),
+      ...(typeof body.completed === "boolean" ? { completed: body.completed } : {}),
+      ...("title" in body ? { title } : {}),
+      ...(body.kind !== undefined ? { kind: body.kind as typeof kinds[number] } : {}),
+      ...(body.area !== undefined ? { area: body.area as typeof areas[number] } : {}),
       updatedAt: new Date().toISOString(),
     }).where(eq(todoItems.id, id)).returning();
+    if (!item) return Response.json({ error: "没有找到这条待办" }, { status: 404 });
     return Response.json({ item });
   } catch (error) { return errorResponse(error); }
 }

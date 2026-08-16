@@ -1,6 +1,6 @@
 "use client";
 
-import { ClipboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ClipboardEvent, KeyboardEvent, PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from "react";
 
 type TimelineItem = {
   startMinute: number;
@@ -68,6 +68,7 @@ function parseTimelineText(raw: string): TimerPlan {
 
   const titlePattern = /^(.*?)[：:]\s*(\d+)\s*分钟\s*$/;
   const itemPattern = /^(\d+)\s*(?:[–—\-~～]|至|到)\s*(\d+)\s*分钟\s*[：:]\s*(.+)$/;
+  const singleTaskPattern = /^(\d+)\s*分钟\s*[,，、:：]\s*(.+)$/;
   const titleLine = lines.find((line) => titlePattern.test(line));
   const titleMatch = titleLine?.match(titlePattern);
 
@@ -82,8 +83,28 @@ function parseTimelineText(raw: string): TimerPlan {
     .filter((item) => item.endMinute > item.startMinute && item.label)
     .sort((a, b) => a.startMinute - b.startMinute);
 
+  const rawTitle = titleMatch?.[1] || "专注练习";
+  const title = rawTitle
+    .replace(/^\s*(?:\d+\s*[.、．]\s*)/, "")
+    .replace(/^['‘’“”]+|['‘’“”]+$/g, "")
+    .trim() || "专注练习";
+
   if (!items.length) {
-    throw new Error("没有识别到时间段。请使用“0–5分钟：任务名称”这样的格式。");
+    const singleTaskMatch = lines.length === 1 ? lines[0].match(singleTaskPattern) : null;
+    if (singleTaskMatch) {
+      const minutes = Number(singleTaskMatch[1]);
+      const label = singleTaskMatch[2].replace(/[。；;.!！]\s*$/, "").trim();
+      if (minutes > 0 && label) {
+        return { title: label, totalMinutes: minutes, items: [{ startMinute: 0, endMinute: minutes, label }] };
+      }
+    }
+
+    if (titleMatch && Number(titleMatch[2]) > 0) {
+      const minutes = Number(titleMatch[2]);
+      return { title, totalMinutes: minutes, items: [{ startMinute: 0, endMinute: minutes, label: title }] };
+    }
+
+    throw new Error("没有识别到任务。独立任务可写“35分钟，完成口语 Part 1”，完整计划可写“0–5分钟：任务名称”。");
   }
 
   for (let index = 1; index < items.length; index += 1) {
@@ -95,13 +116,15 @@ function parseTimelineText(raw: string): TimerPlan {
   const derivedTotal = Math.max(...items.map((item) => item.endMinute));
   const statedTotal = titleMatch ? Number(titleMatch[2]) : derivedTotal;
   const totalMinutes = Math.max(statedTotal, derivedTotal);
-  const rawTitle = titleMatch?.[1] || "专注练习";
-  const title = rawTitle
-    .replace(/^\s*(?:\d+\s*[.、．]\s*)/, "")
-    .replace(/^['‘’“”]+|['‘’“”]+$/g, "")
-    .trim() || "专注练习";
 
   return { title, totalMinutes, items };
+}
+
+function formatPlanText(plan: TimerPlan) {
+  return [
+    `${plan.title}：${plan.totalMinutes}分钟`,
+    ...plan.items.map((item) => `${item.startMinute}–${item.endMinute}分钟：${item.label}`),
+  ].join("\n");
 }
 
 function plannedSeconds(item: TimelineItem) {
@@ -110,6 +133,14 @@ function plannedSeconds(item: TimelineItem) {
 
 function createProgress(plan: TimerPlan): ItemProgress[] {
   return plan.items.map(() => ({ completed: false, actualSeconds: 0, addedSeconds: 0 }));
+}
+
+function findNextOpenIndex(progress: ItemProgress[], currentIndex: number) {
+  for (let offset = 1; offset <= progress.length; offset += 1) {
+    const index = (currentIndex + offset) % progress.length;
+    if (!progress[index].completed) return index;
+  }
+  return -1;
 }
 
 function formatTime(seconds: number) {
@@ -141,9 +172,20 @@ export default function TimelineTimer({ hidden = false, onRecorded }: { hidden?:
   const [parseMessage, setParseMessage] = useState("示例计划已识别，可以直接开始。");
   const [hydrated, setHydrated] = useState(false);
   const [recorded, setRecorded] = useState(false);
+  const [singleTitle, setSingleTitle] = useState("");
+  const [singleMinutes, setSingleMinutes] = useState(35);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editLabel, setEditLabel] = useState("");
+  const [editMinutes, setEditMinutes] = useState("");
+  const [addingItem, setAddingItem] = useState(false);
+  const [newItemLabel, setNewItemLabel] = useState("");
+  const [newItemMinutes, setNewItemMinutes] = useState(5);
+  const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const runAnchorRef = useRef<RunAnchor | null>(null);
   const expiredChimeRef = useRef(false);
+  const draggingIndexRef = useRef<number | null>(null);
 
   useEffect(() => {
     try {
@@ -297,9 +339,9 @@ export default function TimelineTimer({ hidden = false, onRecorded }: { hidden?:
         const finishedProgress = itemProgress.map((item, index) => index === activeIndex
           ? { ...item, completed: true, actualSeconds: anchor.itemActualSeconds + runSeconds }
           : item);
-        const nextIndex = activeIndex + 1;
+        const nextIndex = findNextOpenIndex(finishedProgress, activeIndex);
         playChime(2);
-        if (!plan || nextIndex >= plan.items.length) {
+        if (!plan || nextIndex < 0) {
           setItemProgress(finishedProgress);
           setActualElapsedSeconds(elapsed);
           setRunning(false);
@@ -333,7 +375,7 @@ export default function TimelineTimer({ hidden = false, onRecorded }: { hidden?:
   ) || 0;
   const totalRemainingSeconds = plan?.items.reduce((sum, item, index) => {
     const progressItem = itemProgress[index];
-    if (!progressItem || progressItem.completed || index < activeIndex) return sum;
+    if (!progressItem || progressItem.completed) return sum;
     if (index === activeIndex) return sum + stageRemainingSeconds;
     return sum + plannedSeconds(item) + progressItem.addedSeconds;
   }, 0) || 0;
@@ -357,12 +399,298 @@ export default function TimelineTimer({ hidden = false, onRecorded }: { hidden?:
       setItemProgress(createProgress(nextPlan));
       setRunning(false);
       setRecorded(false);
+      setEditingIndex(null);
+      setAddingItem(false);
       runAnchorRef.current = null;
       expiredChimeRef.current = false;
       setParseMessage(`已识别 ${nextPlan.items.length} 个时间段，共 ${nextPlan.totalMinutes} 分钟。`);
     } catch (error) {
       setParseMessage(error instanceof Error ? error.message : "无法识别这段计划。");
     }
+  }
+
+  function prepareSingleTask() {
+    const title = singleTitle.trim();
+    const minutes = Math.round(Number(singleMinutes));
+    if (!title || !Number.isFinite(minutes) || minutes < 1 || minutes > 720) {
+      setParseMessage("请填写任务名称，并设置 1–720 分钟的独立任务时间。");
+      return;
+    }
+    applyText(`${minutes}分钟，${title}`);
+    setParseMessage(`独立任务“${title}”已准备，共 ${minutes} 分钟。`);
+  }
+
+  function beginItemEdit(index: number) {
+    if (!plan || sessionComplete) return;
+    const item = plan.items[index];
+    const totalSeconds = plannedSeconds(item) + (itemProgress[index]?.addedSeconds || 0);
+    setEditingIndex(index);
+    setEditLabel(item.label);
+    setEditMinutes(String(Math.max(1, Math.round(totalSeconds / 60))));
+  }
+
+  function cancelItemEdit() {
+    setEditingIndex(null);
+    setEditLabel("");
+    setEditMinutes("");
+  }
+
+  function saveItemEdit(index: number) {
+    if (!plan || sessionComplete || !plan.items[index]) return;
+    const label = editLabel.trim();
+    const minutes = Math.round(Number(editMinutes));
+    if (!label || !Number.isFinite(minutes) || minutes < 1 || minutes > 720) {
+      setParseMessage("任务名称不能为空；单项时间需为 1–720 分钟。");
+      return;
+    }
+
+    const wasRunning = running;
+    const snapshot = getSnapshot();
+    const durations = plan.items.map((item, itemIndex) => (
+      itemIndex === index ? minutes : item.endMinute - item.startMinute
+    ));
+    let cursor = 0;
+    const nextItems = plan.items.map((item, itemIndex) => {
+      const startMinute = cursor;
+      cursor += durations[itemIndex];
+      return {
+        startMinute,
+        endMinute: cursor,
+        label: itemIndex === index ? label : item.label,
+      };
+    });
+    const nextPlan: TimerPlan = {
+      title: plan.items.length === 1 && plan.title === plan.items[index].label ? label : plan.title,
+      totalMinutes: cursor,
+      items: nextItems,
+    };
+    const nextProgress = snapshot.progress.map((item, itemIndex) => (
+      itemIndex === index ? { ...item, addedSeconds: 0 } : item
+    ));
+    const nextRemaining = index === activeIndex && !nextProgress[index]?.completed
+      ? Math.max(0, minutes * 60 - nextProgress[index].actualSeconds)
+      : snapshot.remaining;
+
+    setRunning(false);
+    runAnchorRef.current = null;
+    setPlan(nextPlan);
+    setInput(formatPlanText(nextPlan));
+    setStageRemainingSeconds(nextRemaining);
+    setActualElapsedSeconds(snapshot.elapsed);
+    setItemProgress(nextProgress);
+    setRecorded(false);
+    expiredChimeRef.current = false;
+    cancelItemEdit();
+
+    if (index === activeIndex && nextRemaining === 0 && !nextProgress[index]?.completed) {
+      setParseMessage(`第 ${index + 1} 项已更新，但新设时间已经用完；可以完成本项或加时。`);
+      return;
+    }
+
+    setParseMessage(`第 ${index + 1} 项已更新为“${label}”，计划 ${minutes} 分钟。`);
+    if (wasRunning && nextRemaining > 0 && !nextProgress[activeIndex]?.completed) {
+      window.setTimeout(() => startRun(activeIndex, nextRemaining, snapshot.elapsed, nextProgress), 0);
+    }
+  }
+
+  function cancelAddItem() {
+    setAddingItem(false);
+    setNewItemLabel("");
+    setNewItemMinutes(5);
+  }
+
+  function addTimelineItem() {
+    if (!plan) return;
+    const label = newItemLabel.trim();
+    const minutes = Math.round(Number(newItemMinutes));
+    if (!label || !Number.isFinite(minutes) || minutes < 1 || minutes > 720) {
+      setParseMessage("新增任务名称不能为空；计划时间需为 1–720 分钟。");
+      return;
+    }
+
+    const wasRunning = running;
+    const wasComplete = sessionComplete;
+    const snapshot = getSnapshot();
+    const startMinute = plan.totalMinutes;
+    const nextPlan: TimerPlan = {
+      ...plan,
+      totalMinutes: startMinute + minutes,
+      items: [...plan.items, { startMinute, endMinute: startMinute + minutes, label }],
+    };
+    const nextProgress = [
+      ...snapshot.progress,
+      { completed: false, actualSeconds: 0, addedSeconds: 0 },
+    ];
+    const nextActiveIndex = wasComplete ? plan.items.length : activeIndex;
+    const nextRemaining = wasComplete ? minutes * 60 : snapshot.remaining;
+
+    setRunning(false);
+    runAnchorRef.current = null;
+    setPlan(nextPlan);
+    setInput(formatPlanText(nextPlan));
+    setActiveIndex(nextActiveIndex);
+    setStageRemainingSeconds(nextRemaining);
+    setActualElapsedSeconds(snapshot.elapsed);
+    setItemProgress(nextProgress);
+    setRecorded(false);
+    setEditingIndex(null);
+    expiredChimeRef.current = false;
+    cancelAddItem();
+    setParseMessage(`已在时间线末尾添加“${label}”，计划 ${minutes} 分钟。`);
+
+    if (wasRunning && nextRemaining > 0 && !nextProgress[nextActiveIndex]?.completed) {
+      window.setTimeout(() => startRun(nextActiveIndex, nextRemaining, snapshot.elapsed, nextProgress), 0);
+    }
+  }
+
+  function removeTimelineItem(index: number) {
+    if (!plan || sessionComplete || !plan.items[index]) return;
+    if (plan.items.length === 1) {
+      setParseMessage("时间线至少需要保留一项任务；可以直接修改这一项。");
+      return;
+    }
+    if (!window.confirm(`删除“${plan.items[index].label}”？已经累计的本轮实际用时会保留。`)) return;
+
+    const wasRunning = running;
+    const snapshot = getSnapshot();
+    const remainingItems = plan.items.filter((_, itemIndex) => itemIndex !== index);
+    let cursor = 0;
+    const nextItems = remainingItems.map((item) => {
+      const duration = item.endMinute - item.startMinute;
+      const startMinute = cursor;
+      cursor += duration;
+      return { ...item, startMinute, endMinute: cursor };
+    });
+    const nextPlan: TimerPlan = { ...plan, totalMinutes: cursor, items: nextItems };
+    const nextProgress = snapshot.progress.filter((_, itemIndex) => itemIndex !== index);
+    let nextActiveIndex = activeIndex;
+    let nextRemaining = snapshot.remaining;
+
+    if (index < activeIndex) {
+      nextActiveIndex = activeIndex - 1;
+    } else if (index === activeIndex) {
+      const searchFrom = Math.min(index, nextProgress.length - 1);
+      const laterIndex = nextProgress.findIndex((item, itemIndex) => itemIndex >= searchFrom && !item.completed);
+      const firstOpenIndex = nextProgress.findIndex((item) => !item.completed);
+      nextActiveIndex = laterIndex >= 0 ? laterIndex : firstOpenIndex >= 0 ? firstOpenIndex : nextProgress.length - 1;
+      const nextItem = nextItems[nextActiveIndex];
+      const nextItemProgress = nextProgress[nextActiveIndex];
+      nextRemaining = nextItemProgress?.completed
+        ? 0
+        : Math.max(0, plannedSeconds(nextItem) + nextItemProgress.addedSeconds - nextItemProgress.actualSeconds);
+    }
+
+    setRunning(false);
+    runAnchorRef.current = null;
+    setPlan(nextPlan);
+    setInput(formatPlanText(nextPlan));
+    setActiveIndex(nextActiveIndex);
+    setStageRemainingSeconds(nextRemaining);
+    setActualElapsedSeconds(snapshot.elapsed);
+    setItemProgress(nextProgress);
+    setRecorded(false);
+    expiredChimeRef.current = false;
+    cancelItemEdit();
+    setParseMessage(`已删除第 ${index + 1} 项，后续任务时间已自动顺延。`);
+
+    if (wasRunning && nextRemaining > 0 && !nextProgress[nextActiveIndex]?.completed) {
+      window.setTimeout(() => startRun(nextActiveIndex, nextRemaining, snapshot.elapsed, nextProgress), 0);
+    }
+  }
+
+  function moveTimelineItem(fromIndex: number, toIndex: number) {
+    if (!plan || fromIndex === toIndex || fromIndex < 0 || toIndex < 0 || fromIndex >= plan.items.length || toIndex >= plan.items.length) return;
+    const wasRunning = running;
+    const snapshot = getSnapshot();
+    const ordered = plan.items.map((item, index) => ({ item, progress: snapshot.progress[index], originalIndex: index }));
+    const [moved] = ordered.splice(fromIndex, 1);
+    ordered.splice(toIndex, 0, moved);
+
+    let cursor = 0;
+    const nextItems = ordered.map(({ item }) => {
+      const duration = item.endMinute - item.startMinute;
+      const startMinute = cursor;
+      cursor += duration;
+      return { ...item, startMinute, endMinute: cursor };
+    });
+    const nextProgress = ordered.map(({ progress }) => progress);
+    const nextActiveIndex = ordered.findIndex(({ originalIndex }) => originalIndex === activeIndex);
+    const nextPlan: TimerPlan = { ...plan, totalMinutes: cursor, items: nextItems };
+
+    setRunning(false);
+    runAnchorRef.current = null;
+    setPlan(nextPlan);
+    setInput(formatPlanText(nextPlan));
+    setActiveIndex(nextActiveIndex);
+    setStageRemainingSeconds(snapshot.remaining);
+    setActualElapsedSeconds(snapshot.elapsed);
+    setItemProgress(nextProgress);
+    expiredChimeRef.current = false;
+    cancelItemEdit();
+    cancelAddItem();
+    setParseMessage(`已将第 ${fromIndex + 1} 项移动到第 ${toIndex + 1} 项，计时进度保持不变。`);
+
+    if (wasRunning && snapshot.remaining > 0 && !nextProgress[nextActiveIndex]?.completed) {
+      window.setTimeout(() => startRun(nextActiveIndex, snapshot.remaining, snapshot.elapsed, nextProgress), 0);
+    }
+  }
+
+  function timelineIndexAtPoint(clientX: number, clientY: number) {
+    const row = document.elementFromPoint(clientX, clientY)?.closest<HTMLElement>("[data-timeline-index]");
+    const index = Number(row?.dataset.timelineIndex);
+    return Number.isInteger(index) ? index : null;
+  }
+
+  function startPointerReorder(event: ReactPointerEvent<HTMLButtonElement>, index: number) {
+    if (!plan || plan.items.length < 2) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    draggingIndexRef.current = index;
+    setDraggingIndex(index);
+    setDragOverIndex(index);
+  }
+
+  function updatePointerReorder(event: ReactPointerEvent<HTMLButtonElement>) {
+    if (draggingIndexRef.current === null) return;
+    const targetIndex = timelineIndexAtPoint(event.clientX, event.clientY);
+    if (targetIndex !== null) setDragOverIndex(targetIndex);
+  }
+
+  function finishPointerReorder(event: ReactPointerEvent<HTMLButtonElement>) {
+    const fromIndex = draggingIndexRef.current;
+    const pointerIndex = timelineIndexAtPoint(event.clientX, event.clientY);
+    const toIndex = pointerIndex ?? dragOverIndex;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    draggingIndexRef.current = null;
+    setDraggingIndex(null);
+    setDragOverIndex(null);
+    if (fromIndex !== null && toIndex !== null) moveTimelineItem(fromIndex, toIndex);
+  }
+
+  function cancelPointerReorder(event: ReactPointerEvent<HTMLButtonElement>) {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    draggingIndexRef.current = null;
+    setDraggingIndex(null);
+    setDragOverIndex(null);
+  }
+
+  function handleReorderKey(event: KeyboardEvent<HTMLButtonElement>, index: number) {
+    if (!plan || plan.items.length < 2) return;
+    const targetIndex = event.key === "ArrowUp"
+      ? Math.max(0, index - 1)
+      : event.key === "ArrowDown"
+        ? Math.min(plan.items.length - 1, index + 1)
+        : event.key === "Home"
+          ? 0
+          : event.key === "End"
+            ? plan.items.length - 1
+            : index;
+    if (targetIndex === index) return;
+    event.preventDefault();
+    moveTimelineItem(index, targetIndex);
+    window.setTimeout(() => {
+      document.querySelector<HTMLButtonElement>(`[data-timeline-index="${targetIndex}"] .timeline-drag-handle`)?.focus();
+    }, 0);
   }
 
   function handlePaste(event: ClipboardEvent<HTMLTextAreaElement>) {
@@ -392,7 +720,7 @@ export default function TimelineTimer({ hidden = false, onRecorded }: { hidden?:
     const finishedProgress = snapshot.progress.map((item, index) => (
       index === activeIndex ? { ...item, completed: true } : item
     ));
-    const nextIndex = activeIndex + 1;
+    const nextIndex = findNextOpenIndex(finishedProgress, activeIndex);
 
     setRunning(false);
     runAnchorRef.current = null;
@@ -400,7 +728,7 @@ export default function TimelineTimer({ hidden = false, onRecorded }: { hidden?:
     setItemProgress(finishedProgress);
     playChime();
 
-    if (nextIndex >= plan.items.length) {
+    if (nextIndex < 0) {
       setStageRemainingSeconds(0);
       return;
     }
@@ -442,6 +770,8 @@ export default function TimelineTimer({ hidden = false, onRecorded }: { hidden?:
     setActualElapsedSeconds(0);
     setItemProgress(nextProgress);
     setRecorded(false);
+    cancelItemEdit();
+    cancelAddItem();
     expiredChimeRef.current = false;
   }
 
@@ -466,16 +796,47 @@ export default function TimelineTimer({ hidden = false, onRecorded }: { hidden?:
 
       <div className="timer-layout">
         <aside className="timer-import-card">
+          <div className="single-task-builder">
+            <div className="single-task-heading">
+              <strong>独立任务</strong>
+              <small>无需创建完整时间线</small>
+            </div>
+            <label>
+              <span>任务名称</span>
+              <input
+                value={singleTitle}
+                onChange={(event) => setSingleTitle(event.target.value)}
+                placeholder="例如：完成口语 Part 1"
+              />
+            </label>
+            <div className="single-task-time-row">
+              <label>
+                <span>专注时间</span>
+                <input
+                  type="number"
+                  min="1"
+                  max="720"
+                  value={singleMinutes}
+                  onChange={(event) => setSingleMinutes(Number(event.target.value))}
+                />
+              </label>
+              <span>分钟</span>
+              <button className="primary-button" type="button" onClick={prepareSingleTask}>准备独立任务</button>
+            </div>
+          </div>
+
+          <div className="timer-setup-divider"><span>或使用完整时间线</span></div>
+
           <label>
             <span>粘贴时间规划</span>
             <textarea
               value={input}
               onChange={(event) => setInput(event.target.value)}
               onPaste={handlePaste}
-              placeholder={'IELTS P4：45分钟\n0–3分钟：整理错题\n3–8分钟：处理机械错误'}
+              placeholder={'35分钟，完成口语 Part 1\n\n或\n\nIELTS P4：45分钟\n0–3分钟：整理错题\n3–8分钟：处理机械错误'}
             />
           </label>
-          <p className="timer-format-hint">支持短横线、长横线、～、“至”和“到”。粘贴完整计划后会自动准备倒计时。</p>
+          <p className="timer-format-hint">独立任务可直接写“35分钟，完成口语 Part 1”。完整计划支持短横线、长横线、～、“至”和“到”。</p>
           <div className="timer-import-actions">
             <button className="primary-button" type="button" onClick={() => applyText(input)}>识别并准备</button>
             <button className="secondary-button" type="button" onClick={() => applyText(examplePlan)}>载入示例</button>
@@ -542,7 +903,11 @@ export default function TimelineTimer({ hidden = false, onRecorded }: { hidden?:
                     const state = progressItem?.completed ? "completed" : index === activeIndex ? "active" : "upcoming";
                     const canComplete = index === activeIndex && !progressItem?.completed && !sessionComplete;
                     return (
-                      <li className={state} key={`${item.startMinute}-${item.endMinute}-${item.label}`}>
+                      <li
+                        className={`${state}${draggingIndex === index ? " dragging" : ""}${dragOverIndex === index && draggingIndex !== index ? " drag-over" : ""}`}
+                        data-timeline-index={index}
+                        key={index}
+                      >
                         <span>{index + 1}</span>
                         <div>
                           <strong>{item.label}</strong>
@@ -552,20 +917,86 @@ export default function TimelineTimer({ hidden = false, onRecorded }: { hidden?:
                             {(progressItem?.actualSeconds || progressItem?.completed) ? ` · 实际 ${formatUsedTime(progressItem.actualSeconds)}` : ""}
                           </small>
                         </div>
-                        <button
-                          className="timeline-check"
-                          type="button"
-                          disabled={!canComplete}
-                          onClick={completeCurrentItem}
-                          aria-label={progressItem?.completed ? `第 ${index + 1} 项已完成` : canComplete ? `完成第 ${index + 1} 项并进入下一项` : `第 ${index + 1} 项尚未开始`}
-                          title={canComplete ? "完成并进入下一项" : undefined}
-                        >
-                          {progressItem?.completed ? "✓" : ""}
-                        </button>
+                        <div className="timeline-item-actions">
+                          <button
+                            className="timeline-check"
+                            type="button"
+                            disabled={!canComplete}
+                            onClick={completeCurrentItem}
+                            aria-label={progressItem?.completed ? `第 ${index + 1} 项已完成` : canComplete ? `完成第 ${index + 1} 项并进入下一项` : `第 ${index + 1} 项尚未开始`}
+                            title={canComplete ? "完成并进入下一项" : undefined}
+                          >
+                            {progressItem?.completed ? "✓" : ""}
+                          </button>
+                          {!sessionComplete && (
+                            <button className="timeline-edit-button" type="button" onClick={() => beginItemEdit(index)}>修改</button>
+                          )}
+                          {!sessionComplete && (
+                            <button
+                              className="timeline-delete-button"
+                              type="button"
+                              disabled={plan.items.length === 1}
+                              onClick={() => removeTimelineItem(index)}
+                              title={plan.items.length === 1 ? "时间线至少保留一项任务" : "删除这一项"}
+                            >
+                              删除
+                            </button>
+                          )}
+                          <button
+                            className="timeline-drag-handle"
+                            type="button"
+                            disabled={plan.items.length < 2}
+                            onPointerDown={(event) => startPointerReorder(event, index)}
+                            onPointerMove={updatePointerReorder}
+                            onPointerUp={finishPointerReorder}
+                            onPointerCancel={cancelPointerReorder}
+                            onKeyDown={(event) => handleReorderKey(event, index)}
+                            aria-label={`拖动第 ${index + 1} 项调整顺序；也可使用上下方向键`}
+                            title="按住拖动，或用上下方向键调整顺序"
+                          >
+                            <span aria-hidden="true">⠿</span>
+                          </button>
+                        </div>
+                        {editingIndex === index && (
+                          <div className="timeline-edit-form">
+                            <label>
+                              <span>任务名称</span>
+                              <input value={editLabel} onChange={(event) => setEditLabel(event.target.value)} />
+                            </label>
+                            <label>
+                              <span>计划分钟</span>
+                              <input type="number" min="1" max="720" value={editMinutes} onChange={(event) => setEditMinutes(event.target.value)} />
+                            </label>
+                            <div>
+                              <button className="primary-button" type="button" onClick={() => saveItemEdit(index)}>保存修改</button>
+                              <button className="secondary-button" type="button" onClick={cancelItemEdit}>取消</button>
+                            </div>
+                          </div>
+                        )}
                       </li>
                     );
                   })}
                 </ol>
+                <div className="timeline-add-area">
+                  {addingItem ? (
+                    <div className="timeline-add-form">
+                      <label>
+                        <span>新任务名称</span>
+                        <input value={newItemLabel} onChange={(event) => setNewItemLabel(event.target.value)} placeholder="例如：整理本轮复盘" />
+                      </label>
+                      <label>
+                        <span>计划分钟</span>
+                        <input type="number" min="1" max="720" value={newItemMinutes} onChange={(event) => setNewItemMinutes(Number(event.target.value))} />
+                      </label>
+                      <div>
+                        <button className="primary-button" type="button" onClick={addTimelineItem}>添加到末尾</button>
+                        <button className="secondary-button" type="button" onClick={cancelAddItem}>取消</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button className="timeline-add-button" type="button" onClick={() => { setAddingItem(true); cancelItemEdit(); }}>＋ 添加小任务</button>
+                  )}
+                </div>
               </div>
             </>
           ) : (
